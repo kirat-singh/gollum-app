@@ -1,0 +1,21 @@
+app_directory = "%(root_dir)s"
+ 
+worker_processes 2
+working_directory app_directory
+ 
+listen "%(interface)s", :backlog => 1024
+
+timeout 60
+ 
+File.umask(027)
+ 
+preload_app true
+ 
+pid "#{app_directory}/unicorn/wiki.pid"
+ 
+stderr_path "#{app_directory}/unicorn/wiki.stderr.log"
+stdout_path "#{app_directory}/unicorn/wiki.stdout.log"
+
+## Local Variables: ##
+## mode: ruby       ##
+## End:             ##
