@@ -1,7 +1,7 @@
-app_directory = "%(root_dir)s"
+app_root = "%(root_dir)s"
  
 worker_processes 2
-working_directory app_directory
+working_directory app_root
  
 listen "%(interface)s", :backlog => 1024
 
@@ -11,10 +11,12 @@ File.umask(027)
  
 preload_app true
  
-pid "#{app_directory}/unicorn/wiki.pid"
+pid "#{app_root}/unicorn/wiki.pid"
  
-stderr_path "#{app_directory}/unicorn/wiki.stderr.log"
-stdout_path "#{app_directory}/unicorn/wiki.stdout.log"
+stderr_path "#{app_root}/unicorn/wiki.stderr.log"
+stdout_path "#{app_root}/unicorn/wiki.stdout.log"
+
+Unicorn::HttpServer::START_CTX[0] = "#{app_root}/bin/unicorn"
 
 ## Local Variables: ##
 ## mode: ruby       ##
