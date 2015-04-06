@@ -1,0 +1,74 @@
+require 'rubygems'
+require 'unicorn'
+require 'rack'
+require 'jwt'
+require 'gollum/app'
+
+use Rack::Session::Cookie, { :key => 'rack.session', :secret => "%(cookie_secret)s", :expire_after => 24*60*60 }
+
+class WSTAuth
+  def initialize(app)
+    @app = app
+    @pk = OpenSSL::PKey::RSA.new File.read File.expand_path '~/.keys/client-keys/site/login_token.pub'
+  end
+
+  def valid_user(cookie)
+    JWT.decode(cookie, @pk)[0]
+  rescue
+    nil
+  end
+
+  def call(env)
+    request = Rack::Request.new(env)
+    session = env['rack.session']
+    user_name_cookie = request.cookies["wst-username-%(auth_cookie_domain)s"]
+    user_info = valid_user(user_name_cookie)
+    if not user_name_cookie or !user_info
+      return [302, {'Location' => "%(auth_uri)s?next=#{request.url}"}, []]
+    end
+    session['gollum.author'] = {
+      :name => user_info["name"],
+      :email => user_info["email"]
+    }
+    @app.call(env)
+  end
+end
+
+use WSTAuth
+
+gollum_path = '%(wiki_dir)s'
+ 
+Precious::App.set(:gollum_path, gollum_path)
+Precious::App.set(:default_markup, :markdown) # set your favorite markup language
+Precious::App.set(:wiki_options, {
+    :universal_toc => false,
+    :mathjax => true,
+    :live_preview => false,
+    :allow_uploads => true,
+    :per_page_uploads => true,
+    :h1_title => true
+})
+
+Gollum::Hook.register(:post_commit, :hook_id) do |committer, sha1|
+  # can't use these yet since the current latest gem grit adapter doesn't support them
+  #committer.wiki.repo.git.pull
+  #committer.wiki.repo.git.push
+  actor = committer.actor
+  # try pushing first since we typically are the only source of commits
+  status = system({'GIT_DIR' => "#{gollum_path}/.git"}, 'git push -q')
+  if status
+    status = system({'GIT_DIR' => "#{gollum_path}/.git", 'GIT_AUTHOR_NAME' => actor.name, 'GIT_AUTHOR_EMAIL' => actor.email}, 'git pull --no-edit')
+    if status == 0
+      system({'GIT_DIR' => "#{gollum_path}/.git"}, 'git push -q')
+    end
+  end
+end
+
+map '%(root_url)s' do
+  run Precious::App
+end
+
+## Local Variables: ##
+## mode: ruby       ##
+## End:             ##
+
